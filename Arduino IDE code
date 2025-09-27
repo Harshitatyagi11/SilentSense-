@@ -1,0 +1,97 @@
+#include <WiFi.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED config
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Pin config
+#define SOUND_PIN 27        // 👈 connect DO pin of sound sensor here
+#define LED_PIN 5
+#define VIBRATION_PIN 4
+
+// WiFi config
+const char* ssid = "neeraj OnePlus Nord CE 2";
+const char* password = "12122121";
+
+WiFiServer server(8888);
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(SOUND_PIN, INPUT);       // Digital input
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(VIBRATION_PIN, OUTPUT);
+
+  // WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected. IP: " + WiFi.localIP().toString());
+  server.begin();
+
+  // OLED init
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("OLED failed");
+    while (1);
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Waiting for sound...");
+  display.display();
+}
+
+void loop() {
+  // Sound detection (digital)
+  int soundDetected = digitalRead(SOUND_PIN);
+  Serial.println(soundDetected);
+
+  if (soundDetected == HIGH) {       // Sound above threshold
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(VIBRATION_PIN, HIGH);
+    delay(200);
+  } else {
+    digitalWrite(LED_PIN, LOW);
+    digitalWrite(VIBRATION_PIN, LOW);
+  }
+
+  // Speech from Wi-Fi (Python)
+  WiFiClient client = server.available();
+  if (client) {
+    String msg = "";
+    while (client.connected()) {
+      while (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          showOnDisplay(msg);
+          msg = "";
+        } else {
+          msg += c;
+        }
+      }
+    }
+    client.stop();
+  }
+  delay(50);
+}
+
+// Display helper
+void showOnDisplay(String text) {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Speech:");
+  display.setTextSize(1);
+  display.setCursor(0, 20);
+  display.println(text);
+  display.display();
+}
